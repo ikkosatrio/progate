@@ -1,0 +1,72 @@
+# PHP
+# Test and package your PHP project.
+# Add steps that run tests, save build artifacts, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/php
+name: $(Build.DefinitionName) - $(Date:ddMMyyy) Build $(BuildID)
+pool:
+  vmImage: $(vmImage)
+
+trigger:
+  branches:
+    include:
+      - master
+     
+  tags:
+    include:
+      - '*-RC*'
+      - '*-GA*'
+
+pr:
+  - master
+
+#variables:
+#  phpVersion: 7.2
+
+jobs:
+- job: pull_request
+  displayName: 'Build and Test for Pull Request'
+  condition: and(succeeded(), eq(variables['Build.Reason'], 'PullRequest'))
+  timeoutInMinutes: 30
+  steps:
+    - template: .azure/doSetPHPVersion.yml
+
+    - template: .azure/doSetTag.yml
+
+    - template: .azure/doBuild.yml
+
+    - template: .azure/doDockerBuild.yml
+      parameters:
+        displayName: 'Build Microservice Docker Image'
+        dockerCommand: 'build'
+        tagSourceBranch: 'PR'
+
+    - template: .azure/doTests.yml
+      parameters:
+        phpUnit: $(PHPUNIT_SCRIPT)
+
+    #- template: .azure/doPublishCodeCoverage.yml
+
+- job: merge_master
+  displayName: 'Build and Test for Merge Master'
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/master'))
+  timeoutInMinutes: 30
+  steps:
+    - template: .azure/doSetPHPVersion.yml
+
+    - template: .azure/doSetTag.yml
+
+    - template: .azure/doBuild.yml
+
+ 
+    - template: .azure/doDockerBuild.yml
+      parameters:
+        displayName: 'Build and Push Microservice Docker Image'
+        dockerCommand: 'buildAndPush'
+        dockerRepository: $(dockerRepository)
+        tag: 'development'
+          
+    - template: .azure/doTests.yml
+      parameters:
+        phpUnit: $(PHPUNIT_SCRIPT)
+
+    #- template: .azure/doPublishCodeCoverage.yml
